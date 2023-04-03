@@ -1,0 +1,92 @@
+# @package _global_
+
+config_name: clip-nuraghe-1
+log_every_n_steps: 100
+length: 480000 # 10 seconds
+
+module: main.module_clip
+
+model:
+  _target_: ${module}.Model
+  lr: 1e-4
+  lr_beta1: 0.99
+  lr_beta2: 0.9
+  lr_eps: 1e-6
+  lr_weight_decay: 1e-3
+  ema_beta: 0.995
+  ema_power: 0.7
+
+  model:
+    _target_: transformers.CLIPModel.from_pretrained
+    pretrained_model_name_or_path: "openai/clip-vit-base-patch32"
+    trust_remote_code: True
+
+datamodule:
+  _target_: ${module}.Datamodule
+  dataset:
+    _target_: data.clap_dataset.CLIPDataset
+    data_path: ${oc.env:DIR_DATA}
+    processor:
+      _target_: transformers.CLIPProcessor.from_pretrained
+      pretrained_model_name_or_path: "openai/clip-vit-base-patch32"
+      trust_remote_code: True
+
+  val_split: 0.33
+  batch_size: 128
+  num_workers: 8
+  pin_memory: False
+
+callbacks:
+  rich_progress_bar:
+    _target_: pytorch_lightning.callbacks.RichProgressBar
+
+  model_checkpoint:
+    _target_: pytorch_lightning.callbacks.ModelCheckpoint
+    monitor: "valid_loss"   # name of the logged metric which determines when model is improving
+    save_top_k: 3           # save k best models (determined by above metric)
+    save_last: True         # additionaly always save model from last epoch
+    mode: "min"             # can be "max" or "min"
+    verbose: False
+    dirpath: ${logs_dir}/ckpts/${config_name}
+    filename: "{epoch:02d}-{valid_loss:.3f}"
+
+  model_summary:
+    _target_: pytorch_lightning.callbacks.RichModelSummary
+    max_depth: 2
+
+  sample_logger:
+    _target_: ${module}.SampleLogger
+    num_items: 6
+    processor:
+      _target_: transformers.CLIPProcessor.from_pretrained
+      pretrained_model_name_or_path: "openai/clip-vit-base-patch32"
+      trust_remote_code: True
+
+loggers:
+  wandb:
+    _target_: pytorch_lightning.loggers.wandb.WandbLogger
+    project: ${oc.env:WANDB_PROJECT}
+    entity: ${oc.env:WANDB_ENTITY}
+    # offline: False  # set True to store all logs only locally
+    job_type: "train"
+    group: ""
+    save_dir: ${logs_dir}
+
+trainer:
+  _target_: pytorch_lightning.Trainer
+  accelerator: "gpu"
+  devices: 1
+  strategy: auto
+  min_epochs: 0
+  max_epochs: -1
+  enable_model_summary: False
+  log_every_n_steps: 1 # Logs metrics every N batches
+  check_val_every_n_epoch: null
+  limit_val_batches: 40
+  profiler: "simple"
+
+  val_check_interval: ${log_every_n_steps}
+  #extra
+  precision: 32 # Precision used for tensors, default `32`
+  #accumulate_grad_batches: 128
+  #gradient_clip_val: 0.5

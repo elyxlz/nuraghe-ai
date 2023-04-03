@@ -1,0 +1,5 @@
+transformers
+torch
+torchvision
+hydra-core
+hydra-colorlog

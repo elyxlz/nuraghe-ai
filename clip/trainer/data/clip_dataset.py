@@ -14,7 +14,7 @@ def coord2img(coord):
     # use google earth engine API to download rgb sat image given a coordinate point
     # sort by cloudiness and choose less cloudy one
 
-    pass
+    return "some rgb img"
 
 class CLIPDataset(Dataset):
     def __init__(
